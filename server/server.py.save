@@ -1,0 +1,190 @@
+import socket
+import threading
+import db
+
+IP = '167.99.193.70'
+PORT = 22000
+bytes_amount_per_message = 1024
+user_login_check = False
+login = ""
+register = ""
+
+class Auth:
+
+    connecting_user = False
+    ERROR_MESSAGE = ""
+
+    def __init__(self, name = "", id = "", password = "", 
+                 pass_re = "{[/|UNDEFINED|\]}", email = "{[/|UNDEFINED|\]}"):
+
+        if(name == "{[/|UNDEFINED|\]}" and
+           id == "{[/|UNDEFINED|\]}" and
+           password == "{[/|UNDEFINED|\]}" and
+           pass_re == "{[/|UNDEFINED|\]}" and
+           email == "{[/|UNDEFINED|\]}"):
+
+            #forceful/lacky connection phase
+            #in case the form is not received as expected
+            self.ERROR_MESSAGE = "You need to fill in the forms in order to connect"
+
+        elif(name == "{[/|UNDEFINED|\]}" and
+             not id == "{[/|UNDEFINED|\]}" and
+             not password == "{[/|UNDEFINED|\]}" and
+             pass_re == "{[/|UNDEFINED|\]}" and
+             email == "{[/|UNDEFINED|\]}"):
+
+            #login phase
+            login_user = db.Login(id, password)
+            self.ERROR_MESSAGE = login_user.ERROR_MESSAGE
+            self.handle_auth()
+
+        elif(not name == "{[/|UNDEFINED|\]}" and
+             not id == "{[/|UNDEFINED|\]}" and
+             not password == "{[/|UNDEFINED|\]}" and
+             not pass_re == "{[/|UNDEFINED|\]}" and
+             not email == "{[/|UNDEFINED|\]}"):
+
+            #register phase
+            register_user = db.Registration(name, id, password, pass_re, email)
+            self.ERROR_MESSAGE = register_user.ERROR_MESSAGE
+            self.handle_auth()
+
+
+
+    def handle_auth(self):
+        if self.ERROR_MESSAGE == "":
+            self.connecting_user = True
+
+
+
+
+
+class Server:
+
+    TCP_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_IP = IP
+    server_PORT = PORT
+    sockets_connected_list = []
+    data_size = bytes_amount_per_message
+
+
+
+    def __init__(self):
+        try:
+            self.TCP_server_socket.bind((self.server_IP, self.server_PORT))
+            self.TCP_server_socket.listen(1)
+
+        except:
+            print("Error at starting the server. Check the IP and PORT!")
+            return
+
+
+
+    def each_connection_handler(self, connection, address):
+        socket_auth = False
+        while True:
+            #try:
+            socket_data = connection.recv(self.data_size)
+
+                #still have to figure out the issue with handling client disconnection
+                #=============#
+            if len(socket_data) == 0:
+                print(str(address[0]), ' : ', str(address[1]), " --- disconnected")
+                self.sockets_connected_list.remove(connection)
+                connection.close()
+                break
+                #=============#
+
+                #=== handle the Auth ===
+                #retrieving the very first word
+            command_check = str(socket_data)
+            command_check = command_check.split()
+
+                #checking if the first word is a command
+            if(not switch_commands(command_check[0]) == False and
+               socket_auth == False):
+                command_successful = execute_command(command_check)
+
+                if command_successful == True:
+                    socket_auth = True
+                else:
+                    connection.send(bytes(command_successful))
+
+            if socket_auth == True:
+                for each_socket in self.sockets_connected_list:
+                    each_socket.send(socket_data)
+            else:
+                connection.send(bytes("===> Please login or register to send messages <==="))
+            '''
+            except:
+
+                #only occurs if the package fails to be sent back to the client
+                #which made the request to receive the package
+                #=============#
+                print("Connection with the IP ", address[0],"abnormally intrerupted")
+                print(str(address[0]), ' : ', str(address[1]), " --- disconnected")
+                self.sockets_connected_list.remove(connection)
+                connection.close()
+                break
+                #=============#
+            '''
+
+
+    def run_server(self):
+        while True:
+            connection_scoket, connection_scoket_address_IP = self.TCP_server_socket.accept()
+
+            connection_thread = threading.Thread(target=self.each_connection_handler, args=(connection_scoket, connection_scoket_address_IP))
+            connection_thread.daemon = True
+            connection_thread.start()
+
+            self.sockets_connected_list.append(connection_scoket)
+            print(str(connection_scoket_address_IP[0]), ' : ', str(connection_scoket_address_IP[1]), " --- connected")
+
+
+
+#========================
+#=== Useful functions ===
+#========================
+
+#checking if the given patter is a command
+def switch_commands(pattern):
+    list = {
+        "{[|AUTH_LOGIN|]}::>>": True,
+        "{[|AUTH_REGISTER|]}::>>": True
+    }
+    return list.get(pattern, False)
+
+
+
+#============================
+#=== Handling the pattern ===
+#============================
+
+#executing the command
+def execute_command(command):
+    if command[0] == "{[|AUTH_LOGIN|]}::>>":
+        login = Auth(command[1] if len(command) == 3 else "", 
+                     command[2] if len(command) == 3 else "")
+
+        if not login.ERROR_MESSAGE == "":
+            return login.ERROR_MESSAGE
+
+    elif command[0] == "{[|AUTH_REGISTER|]}::>>":
+        register = Auth(command[1] if len(command) == 6 else "",
+                        command[2] if len(command) == 6 else "",
+                        command[3] if len(command) == 6 else "",
+                        command[4] if len(command) == 6 else "",
+                        command[5] if len(command) == 6 else "")
+
+        if not register.ERROR_MESSAGE == "":
+            return register.ERROR_MESSAGE
+
+    return True
+
+
+#initializing the server
+server = Server()
+
+#running the server
+server.run_server()
