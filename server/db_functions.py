@@ -14,3 +14,10 @@ def search_by_id(account_id):
                     return aux_line
     except:
         return False
+
+
+
+def search_by_name(account_name):
+    path = "db/accounts/"
+
+    

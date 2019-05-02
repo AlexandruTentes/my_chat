@@ -183,10 +183,13 @@ class Server:
         while True:
             connection_socket, connection_socket_address_IP = self.TCP_server_socket.accept()
 
+            self.sockets_connected_list[(connection_socket, connection_socket_address_IP)] = [False, 0, "", "", "", 0]
+            print(str(connection_socket_address_IP[0]), ' : ', str(connection_socket_address_IP[1]), " --- connected")
+
             connection_thread = threading.Thread(target=self.each_connection_handler, args=(connection_socket, connection_socket_address_IP))
             connection_thread.daemon = True
             connection_thread.start()
-            
+
             try:
                 connection_socket.send(bytes("To start using the commands type '@>' followed by a space and one of the following:"))
                 time.sleep(.300)
@@ -199,12 +202,9 @@ class Server:
                 connection_socket.send(bytes("'global' - *no arguments* : connect to global chat"))
                 time.sleep(.200)
                 connection_socket.send(bytes("'disconnect' - *no arguments* : log out of your account"))
-            
+
             except:
                 print("connection lost, client crash")
-
-            self.sockets_connected_list[(connection_socket, connection_socket_address_IP)] = [False, 0, "", "", "", 0]
-            print(str(connection_socket_address_IP[0]), ' : ', str(connection_socket_address_IP[1]), " --- connected")
 
 
 
